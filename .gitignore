@@ -1,0 +1,17 @@
+# Python environment files
+venv/
+env/
+__pycache__/
+*.py[cod]
+
+# Data files (To prevent 100MB+ upload errors)
+*.vcf
+*.vcf.gz
+*.bcf
+*.tbi
+*.csi
+data/
+input_genomes/
+
+# Streamlit temporary files
+.streamlit/config.toml
