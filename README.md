@@ -1,7 +1,7 @@
 
 # 🧬  WGS SNP Analyzer
 
-### Ph.D. Research Project | Nutrigenetics & Hypertension
+###  Research Project | Nutrigenetics & Hypertension
 **Author:** Karan Singh Negi 
 **Focus:** Gene-Lifestyle Interaction of ACE I/D polymorphism (North Indians)
 
