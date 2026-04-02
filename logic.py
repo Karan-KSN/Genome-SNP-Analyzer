@@ -1,6 +1,6 @@
-import re
-import requests
 from cyvcf2 import VCF
+import requests
+import re
 
 def get_gdrive_direct_link(url):
     """Converts a Google Drive 'Share' link into a 'Direct Download' link."""
@@ -11,18 +11,16 @@ def get_gdrive_direct_link(url):
     return url
 
 def parse_remote_genome(vcf_url, tbi_url, region="17:63477061-63500000"):
-    """
-    Specifically handles the 'Two-Link' system for Google Drive.
-    """
     try:
         vcf_direct = get_gdrive_direct_link(vcf_url)
         tbi_direct = get_gdrive_direct_link(tbi_url)
         
-        # We tell cyvcf2 exactly where the index is 
-        # (This is the secret to making GDrive work!)
-        vcf = VCF(vcf_direct, index_url=tbi_direct) 
+        # New approach: Some versions of cyvcf2 prefer the index 
+        # to be passed as the second positional argument, not a keyword.
+        vcf = VCF(vcf_direct, tbi_direct) 
         
         results = []
+        # 'vcf(region)' is the magic command that streams the data
         for variant in vcf(region):
             if variant.ID and "rs" in variant.ID:
                 results.append({
@@ -30,6 +28,11 @@ def parse_remote_genome(vcf_url, tbi_url, region="17:63477061-63500000"):
                     "Chr": variant.CHROM,
                     "Pos": variant.POS,
                     "Genotype": variant.gt_bases[0]
+                })
+        return results
+    except Exception as e:
+        # This will tell us if it's still a link issue or a code issue
+        return f"Bioinformatics Engine Error: {str(e)}"
                 })
         return results
     except Exception as e:
