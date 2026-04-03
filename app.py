@@ -1,26 +1,27 @@
 import streamlit as st
 import os
-
-st.title("🧬 Personal Nutrigenetics Risk Analyzer")
-st.markdown("### Upload your genetic data to discover your unique risks.")
-
-# User-Friendly File Uploaders
-uploaded_vcf = st.file_uploader("Upload your VCF (.gz)", type=["gz"])
-uploaded_tbi = st.file_uploader("Upload your Index (.tbi)", type=["tbi"])
-
-import streamlit as st
-import os
 from logic import parse_remote_genome, fetch_snp_wisdom, generate_pdf_report
 
+# Set page config for a professional look
+st.set_page_config(page_title="Iron Primer: Genomic Risk", page_icon="🧬")
+
 st.title("🧬 Personal Nutrigenetics Risk Analyzer")
 st.markdown("### Upload your genetic data to discover your unique risks.")
 
-# 1. User-Friendly File Uploaders
-uploaded_vcf = st.file_uploader("Upload your VCF (.gz)", type=["gz"])
-uploaded_tbi = st.file_uploader("Upload your Index (.tbi)", type=["tbi"])
+# 1. User-Friendly File Uploaders (With Unique Keys to fix Duplicate ID error)
+uploaded_vcf = st.file_uploader(
+    "Upload your Genomic VCF (.gz)", 
+    type=["gz"], 
+    key="vcf_main"
+)
+uploaded_tbi = st.file_uploader(
+    "Upload your Index (.tbi)", 
+    type=["tbi"], 
+    key="tbi_main"
+)
 
 if uploaded_vcf and uploaded_tbi:
-    # Save the uploaded files to the /tmp directory so cyvcf2 can read them locally
+    # Save to local /tmp directory
     vcf_path = "temp_user.vcf.gz"
     tbi_path = "temp_user.vcf.gz.tbi"
     
@@ -29,9 +30,9 @@ if uploaded_vcf and uploaded_tbi:
     with open(tbi_path, "wb") as f:
         f.write(uploaded_tbi.getbuffer())
         
-    st.success("Data Loaded! Now, pick your focus area.")
+    st.success("✅ Genetic Data Streamed Successfully!")
     
-    # 2. The Gene Dropdown Menu
+    # 2. Gene Selection Menu
     GENE_MAP = {
         "ACE (Endurance & Hypertension Risk)": "chr17:63477061-63500000",
         "MTHFR (Folate & DNA Repair)": "chr1:11785729-11785731",
@@ -42,23 +43,22 @@ if uploaded_vcf and uploaded_tbi:
     selected_label = st.selectbox("Which gene would you like to analyze?", list(GENE_MAP.keys()))
     target_region = GENE_MAP[selected_label]
 
-    # 3. Execution Button
+    # 3. Execution
     if st.button("Generate My Risk Profile"):
-        with st.spinner(f"Analyzing {selected_label}..."):
-            # Note: We pass the LOCAL file paths now, not URLs
+        with st.spinner(f"Scanning {selected_label} locus..."):
             results = parse_remote_genome(vcf_path, tbi_path, target_region)
             
             if isinstance(results, str):
                 st.error(results)
             else:
-                st.success(f"Found {len(results)} variants in the {selected_label} region!")
+                st.success(f"Found {len(results)} variants!")
                 st.table(results)
                 
-                # 4. PDF Generation
+                # 4. Clinical PDF Generation
                 pdf_bytes = generate_pdf_report(results)
                 st.download_button(
                     label="📥 Download My Clinical PDF Report",
                     data=pdf_bytes,
-                    file_name="My_Nutrigenetics_Report.pdf",
+                    file_name=f"{selected_label}_Risk_Report.pdf",
                     mime="application/pdf"
                 )
