@@ -3,10 +3,24 @@ import requests
 from cyvcf2 import VCF
 from fpdf import FPDF
 
-def parse_remote_genome(vcf_path, tbi_path, region):
+def get_vcf_chrom_prefix(vcf, target_num):
     """
-    Bioinformatics Engine: Optimized for ClinVar and GIAB datasets.
-    Handles 'Site-Only' VCFs by providing a fallback for genotypes.
+    Detects if the VCF uses 'chr17', '17', or Accession numbers.
+    """
+    # Check common patterns in the VCF's internal index (seqnames)
+    vcf_chroms = vcf.seqnames
+    patterns = [f"chr{target_num}", str(target_num), f"NC_0000{target_num.zfill(2)}"]
+    
+    for p in patterns:
+        for actual in vcf_chroms:
+            if actual.startswith(p):
+                return actual
+    return f"chr{target_num}" # Fallback
+
+def parse_remote_genome(vcf_path, tbi_path, region_data):
+    """
+    Bioinformatics Engine: Direct Local Processing.
+    Now with Auto-Chromosome Detection to fix 'No variants found'.
     """
     try:
         if not os.path.exists(vcf_path):
@@ -14,16 +28,22 @@ def parse_remote_genome(vcf_path, tbi_path, region):
         
         vcf = VCF(vcf_path)
         
-        # 1. Safety Check: Verify file readability
+        # 1. Extract Chrom, Start, End from our app's internal format (e.g. 'chr17:start-end')
+        raw_chrom = region_data.split(":")[0].replace("chr", "")
+        coords = region_data.split(":")[1]
+        
+        # 2. Auto-Detect the correct Chromosome name in the VCF
+        correct_chrom = get_vcf_chrom_prefix(vcf, raw_chrom)
+        final_query = f"{correct_chrom}:{coords}"
+        
+        # 3. Safety Check
         try:
             test_vcf = VCF(vcf_path)
             next(test_vcf()) 
         except StopIteration:
             return "Error: The uploaded VCF appears to be empty."
-        except Exception as e:
-            return f"VCF Format Error: {str(e)}"
 
-        # 2. Master Registry (GRCh38)
+        # 4. Master Registry (GRCh38 Coordinates)
         NUTRIGENETICS_REGISTRY = {
             63477061: "rs4646994 (ACE)",
             11785729: "rs1801133 (MTHFR)",
@@ -33,12 +53,11 @@ def parse_remote_genome(vcf_path, tbi_path, region):
 
         results = []
         
-        # 3. Regional Scan
-        for variant in vcf(region):
+        # 5. Regional Scan using the auto-detected 'final_query'
+        for variant in vcf(final_query):
             pos = int(variant.POS)
             file_id = str(variant.ID) if variant.ID else "."
             
-            # IDENTITY LOGIC: Prioritize Registry -> File ID -> Coordinate
             if pos in NUTRIGENETICS_REGISTRY:
                 final_id = NUTRIGENETICS_REGISTRY[pos]
             elif file_id not in [".", "None", "nan", ""]:
@@ -46,15 +65,11 @@ def parse_remote_genome(vcf_path, tbi_path, region):
             else:
                 final_id = f"{variant.CHROM}:{pos}"
 
-            # GENOTYPE LOGIC: Safe extraction for ClinVar (which may have 0 samples)
-            try:
-                # If sample data exists (GIAB), get it. Otherwise, show Ref/Alt for ClinVar.
-                if len(vcf.samples) > 0:
-                    gt = variant.gt_bases[0] if variant.gt_bases else "./."
-                else:
-                    gt = f"{variant.REF}/{variant.ALT[0]}" # Database view
-            except:
-                gt = "Data N/A"
+            # ClinVar-Safe Genotype Extraction
+            if len(vcf.samples) > 0:
+                gt = variant.gt_bases[0] if variant.gt_bases else "./."
+            else:
+                gt = f"{variant.REF}/{variant.ALT[0]}" 
 
             results.append({
                 "RSID": final_id,
@@ -63,13 +78,12 @@ def parse_remote_genome(vcf_path, tbi_path, region):
                 "Genotype": gt
             })
             
-        return results if results else f"No variants found in {region}."
+        return results if results else f"No variants found in {final_query}. Verify the Genome Build (GRCh38 required)."
 
     except Exception as e:
         return f"Bioinformatics Engine Error: {str(e)}"
 
 def fetch_snp_wisdom(rsid):
-    """Clinical Annotation: Fetches significance from MyVariant.info."""
     try:
         clean_id = str(rsid).split(" ")[0].lower()
         if ":" in clean_id:
@@ -82,25 +96,19 @@ def fetch_snp_wisdom(rsid):
         res = requests.get(url, timeout=5).json()
         clinvar = res.get('clinvar', {})
         if isinstance(clinvar, list): clinvar = clinvar[0]
-        
         rcv = clinvar.get('rcv', [{}])
-        if isinstance(rcv, list) and len(rcv) > 0:
-            return rcv[0].get('clinical_significance', 'Likely Benign/VUS')
-        return 'Unannotated Variation'
+        return rcv[0].get('clinical_significance', 'Likely Benign/VUS') if rcv else 'Unannotated'
     except:
-        return "Database Record Not Found"
+        return "Clinical Record Not Found"
 
 def generate_pdf_report(results):
-    """Reporting Engine: Creates professional PDF bytes."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(200, 10, txt="Genomic Risk Report", ln=True, align='C')
-    
     pdf.set_font("Arial", size=10)
     for row in results:
         pdf.ln(5)
         wisdom = fetch_snp_wisdom(row['RSID'])
         pdf.multi_cell(0, 10, f"RSID: {row['RSID']} | Genotype: {row['Genotype']}\nInterpretation: {wisdom}", border=1)
-        
     return bytes(pdf.output())
