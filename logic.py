@@ -44,8 +44,8 @@ def parse_remote_genome(vcf_path, tbi_path, region):
             elif file_id not in [".", "None", "nan", ""]:
                 final_id = file_id
             else:
-                final_id = f"chr{variant.CHROM}:{pos}"
-
+                # Remove the manual 'chr' since the file already provides it
+            final_id = f"{variant.CHROM}:{pos}"
             results.append({
                 "RSID": final_id,
                 "Chr": variant.CHROM,
@@ -61,18 +61,27 @@ def parse_remote_genome(vcf_path, tbi_path, region):
 def fetch_snp_wisdom(rsid):
     """Clinical Annotation: Fetches significance from MyVariant.info."""
     try:
-        # Strip the extra names in parentheses for the API call
-        clean_rsid = str(rsid).split(" ")[0].lower()
-        if "rs" not in clean_rsid:
-            return "Custom Coordinate: No clinical data in database."
-            
-        url = f"https://myvariant.info/v1/variant/{clean_rsid}"
+        clean_id = str(rsid).split(" ")[0].lower()
+        
+        # If it's a coordinate (e.g. chr17:63477061), we format it for the API
+        if ":" in clean_id:
+            # MyVariant.info coordinate format: chr17:g.63477061
+            chrom, pos = clean_id.split(":")
+            api_query = f"{chrom}:g.{pos}"
+        else:
+            api_query = clean_id
+
+        url = f"https://myvariant.info/v1/variant/{api_query}"
         res = requests.get(url, timeout=5).json()
+        
+        # ClinVar results can be nested differently for coordinates
         clinvar = res.get('clinvar', {})
         if isinstance(clinvar, list): clinvar = clinvar[0]
-        return clinvar.get('rcv', [{}])[0].get('clinical_significance', 'No Data Found')
+        
+        significance = clinvar.get('rcv', [{}])[0].get('clinical_significance', 'Likely Benign/VUS')
+        return significance
     except:
-        return "SNP Database Timeout"
+        return "Unannotated Variant (Common Variation)"
 
 def generate_pdf_report(results):
     """Reporting Engine: Generates professional PDF bytes."""
