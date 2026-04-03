@@ -52,18 +52,7 @@ def parse_remote_genome(vcf_url, tbi_url, region="chr2:135787840-135837170"):
         with tempfile.TemporaryDirectory() as tmpdir:
             vcf_path = os.path.join(tmpdir, "remote.vcf.gz")
             tbi_path = os.path.join(tmpdir, "remote.vcf.gz.tbi")
-            for variant in vcf(region):
-                # Clean up the RSID logic
-                raw_id = variant.ID if variant.ID and variant.ID != "." else None
-                display_id = raw_id if raw_id else f"chr{variant.CHROM}:{variant.POS}"
-                
-                results.append({
-                    "RSID": display_id,
-                    "Chr": variant.CHROM,
-                    "Pos": variant.POS,
-                    "Genotype": variant.gt_bases[0] if variant.gt_bases else "./."
-                })
-
+            
             # UNIVERSAL DOWNLOADER
             def download_universal(url, dest):
                 session = requests.Session()
