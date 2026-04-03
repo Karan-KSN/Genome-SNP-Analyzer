@@ -106,3 +106,56 @@ def fetch_snp_wisdom(rsid):
         return clinvar.get('rcv', [{}])[0].get('clinical_significance', 'No Data Found')
     except:
         return "SNP Database Timeout"
+from fpdf import FPDF
+import io
+
+def generate_pdf_report(results):
+    """
+    Generates a professional Nutrigenetics PDF report.
+    This is the 'Executive Summary' for the user.
+    """
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # 1. Header & Branding
+    pdf.set_font("Arial", 'B', 20)
+    pdf.set_text_color(30, 70, 140) # Professional Deep Blue
+    pdf.cell(200, 15, txt="Nutrigenetics Analysis Report", ln=True, align='C')
+    
+    pdf.set_font("Arial", 'I', 10)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(200, 10, txt="Powered by The Iron Primer Bioinformatics Engine", ln=True, align='C')
+    pdf.ln(10)
+    
+    # 2. Results Table
+    pdf.set_font("Arial", 'B', 12)
+    pdf.set_fill_color(230, 230, 230)
+    pdf.set_text_color(0, 0, 0)
+    
+    # Table Column Headers
+    pdf.cell(60, 10, "RSID / Coordinate", 1, 0, 'C', True)
+    pdf.cell(40, 10, "Chr", 1, 0, 'C', True)
+    pdf.cell(40, 10, "Pos", 1, 0, 'C', True)
+    pdf.cell(50, 10, "Genotype", 1, 1, 'C', True)
+    
+    # Table Data Rows
+    pdf.set_font("Arial", size=10)
+    for row in results:
+        pdf.cell(60, 10, str(row['RSID']), 1)
+        pdf.cell(40, 10, str(row['Chr']), 1)
+        pdf.cell(40, 10, str(row['Pos']), 1)
+        pdf.cell(50, 10, str(row['Genotype']), 1, 1, 'C')
+        
+    # 3. Footer & Legal
+    pdf.ln(20)
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(0, 10, "Scientific Interpretation:", ln=True)
+    pdf.set_font("Arial", size=9)
+    pdf.multi_cell(0, 5, "This report identifies specific genetic variants. Clinical significance is based on the MyVariant.info database and relevant literature (e.g., Rigat et al., 1990 for ACE; Sayed-Tabatabaei et al., 2006).")
+    
+    pdf.ln(10)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.multi_cell(0, 5, "DISCLAIMER: For research use only. This is not a clinical diagnostic tool. Consult a certified genetic counselor for medical advice.")
+
+    # Return as bytes for Streamlit
+    return pdf.output(dest='S')
