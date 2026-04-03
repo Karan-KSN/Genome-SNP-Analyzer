@@ -12,10 +12,26 @@ def get_confirm_token(response):
             return value
     return None
 
-def download_gdrive_large_file(file_id, dest):
-    """Specialized downloader for GDrive files > 100MB."""
-    url = "https://docs.google.com/uc?export=download"
+def download_large_file(url, dest):
+    """Universal downloader for GitHub or GDrive."""
     session = requests.Session()
+    # Try GDrive logic first
+    if "drive.google.com" in url or "docs.google.com" in url:
+        file_id = re.search(r'/d/([a-zA-Z0-9-_]+)', url).group(1)
+        download_url = "https://docs.google.com/uc?export=download"
+        response = session.get(download_url, params={'id': file_id}, stream=True)
+        token = get_confirm_token(response)
+        if token:
+            response = session.get(download_url, params={'id': file_id, 'confirm': token}, stream=True)
+    else:
+        # Standard GitHub/Direct link logic
+        response = session.get(url, stream=True, timeout=30)
+    
+    response.raise_for_status()
+    with open(dest, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=1024*1024):
+            if chunk:
+                f.write(chunk)
     
     # First attempt to get the token
     response = session.get(url, params={'id': file_id}, stream=True)
