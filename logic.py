@@ -55,3 +55,26 @@ def parse_remote_genome(vcf_url, tbi_url, region="chr2:135787840-135837170"):
 
     except Exception as e:
         return f"Bioinformatics Engine Error: {str(e)}"
+        def fetch_snp_wisdom(rsid):
+    """
+    Connects to MyVariant.info to fetch clinical significance for your PhD.
+    This provides the 'Wisdom' for the Nutrigenetics analysis.
+    """
+    try:
+        # If it's a coordinate ID (chr17:63477061), we can't fetch wisdom yet
+        if "rs" not in str(rsid).lower():
+            return "Custom Coordinate: Clinical data not available in SNP database."
+            
+        url = f"https://myvariant.info/v1/variant/{rsid}"
+        res = requests.get(url, timeout=5).json()
+        
+        # Dig into the JSON response for ClinVar data
+        clinvar = res.get('clinvar', {})
+        if isinstance(clinvar, list): 
+            clinvar = clinvar[0]
+            
+        # Get the significance (e.g., 'Pathogenic', 'Benign', 'Risk factor')
+        significance = clinvar.get('rcv', [{}])[0].get('clinical_significance', 'No Data Found')
+        return significance
+    except Exception:
+        return "SNP Database Timeout or No Clinical Data"
