@@ -26,19 +26,39 @@ def parse_remote_genome(vcf_path, tbi_path, region):
 
         results = []
         
+       # --- NEW: NUTRIGENETICS REGISTRY ---
+        # This maps the physical position (GRCh38) to the official RSID
+        NUTRIGENETICS_REGISTRY = {
+            63477061: "rs4646994 (ACE)",
+            11785729: "rs1801133 (MTHFR)",
+            74749576: "rs762551 (CYP1A2)",
+            135837170: "rs4988235 (LCT)"
+        }
+
+        results = []
+        
         # 3. Regional Scan
         for variant in vcf(region):
+            pos = int(variant.POS)
+            file_id = variant.ID
+            
+            # IDENTITY LOGIC:
+            # 1. Use file ID if it exists.
+            # 2. If file has '.', check our Registry.
+            # 3. Otherwise, use Coordinate.
+            if file_id and file_id != ".":
+                final_id = file_id
+            elif pos in NUTRIGENETICS_REGISTRY:
+                final_id = NUTRIGENETICS_REGISTRY[pos]
+            else:
+                final_id = f"chr{variant.CHROM}:{pos}"
+
             results.append({
-                "RSID": variant.ID if variant.ID != "." else f"chr{variant.CHROM}:{variant.POS}",
+                "RSID": final_id,
                 "Chr": variant.CHROM,
-                "Pos": variant.POS,
+                "Pos": pos,
                 "Genotype": variant.gt_bases[0] if variant.gt_bases else "./."
             })
-            
-        return results if results else f"No variants found in {region}."
-
-    except Exception as e:
-        return f"Bioinformatics Engine Error: {str(e)}"
 
 def fetch_snp_wisdom(rsid):
     """Clinical Annotation for the PhD/Portfolio."""
