@@ -63,4 +63,4 @@ def generate_pdf_report(results):
     for row in results:
         pdf.ln(5)
         pdf.cell(0, 10, f"RSID: {row['RSID']} | Genotype: {row['Genotype']}", ln=True)
-    return pdf.output(dest='S')
+    return bytes(pdf.output())
