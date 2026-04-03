@@ -20,17 +20,17 @@ if uploaded_vcf and uploaded_tbi:
         
     st.success("✅ Genomic Data Synced.")
     
-    # Focused target regions for rapid API querying
+    # EXACT GRCh38 Loci Windows
     GENE_MAP = {
-        "ACE (Endurance/Hypertension)": "chr17:63477000-63480000", 
-        "MTHFR (Folate/Energy)": "chr1:11785000-11790000",   
-        "LCT (Lactose Tolerance)": "chr2:135830000-135840000",
+        "ACE (Endurance/Hypertension)": "chr17:63488000-63489000", 
+        "MTHFR (Folate/Energy)": "chr1:11796000-11797000",   
+        "LCT (Lactose Tolerance)": "chr2:135850000-135852000",
         "CYP1A2 (Caffeine Metabolism)": "chr15:74749000-74750000"
     }
     selected = st.selectbox("Select Target Gene Panel:", list(GENE_MAP.keys()))
     
     if st.button("Execute Targeted Panel Scan"):
-        with st.spinner(f"Isolating pathogenic and key structural markers for {selected.split(' ')[0]}..."):
+        with st.spinner(f"Scanning precise locus for {selected.split(' ')[0]}..."):
             results = parse_remote_genome(vcf_path, tbi_path, GENE_MAP[selected])
             if isinstance(results, str):
                 st.info(results)
