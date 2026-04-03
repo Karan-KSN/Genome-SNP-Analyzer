@@ -5,41 +5,49 @@ import os
 import re
 from cyvcf2 import VCF
 
-def convert_gdrive_link(url):
-    """Converts a standard GDrive share link to a direct download link."""
-    if "drive.google.com" in url:
-        match = re.search(r'/d/([a-zA-Z0-9-_]+)', url)
-        if match:
-            file_id = match.group(1)
-            return f"https://drive.google.com/uc?export=download&id={file_id}"
-    return url
+def get_confirm_token(response):
+    """Extracts the Google Drive virus scan confirmation token."""
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            return value
+    return None
+
+def download_gdrive_large_file(file_id, dest):
+    """Specialized downloader for GDrive files > 100MB."""
+    url = "https://docs.google.com/uc?export=download"
+    session = requests.Session()
+    
+    # First attempt to get the token
+    response = session.get(url, params={'id': file_id}, stream=True)
+    token = get_confirm_token(response)
+
+    if token:
+        params = {'id': file_id, 'confirm': token}
+        response = session.get(url, params=params, stream=True)
+    
+    response.raise_for_status()
+    with open(dest, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=1024*1024):
+            if chunk:
+                f.write(chunk)
 
 def parse_remote_genome(vcf_url, tbi_url, region="chr2:135787840-135837170"):
-    # 1. Convert Links
-    vcf_direct = convert_gdrive_link(vcf_url)
-    tbi_direct = convert_gdrive_link(tbi_url)
-    
     try:
+        # Extract IDs from the links you provided
+        vcf_id = re.search(r'/d/([a-zA-Z0-9-_]+)', vcf_url).group(1)
+        tbi_id = re.search(r'/d/([a-zA-Z0-9-_]+)', tbi_url).group(1)
+        
         with tempfile.TemporaryDirectory() as tmpdir:
             vcf_path = os.path.join(tmpdir, "remote.vcf.gz")
             tbi_path = os.path.join(tmpdir, "remote.vcf.gz.tbi")
 
-            # 2. Download with high-speed streaming
-            def download_file(url, dest):
-                r = requests.get(url, stream=True, timeout=30)
-                r.raise_for_status()
-                with open(dest, 'wb') as f:
-                    for chunk in r.iter_content(chunk_size=1024*1024):
-                        f.write(chunk)
-            
-            download_file(vcf_direct, vcf_path)
-            download_file(tbi_direct, tbi_path)
+            # Use the specialized large-file downloader
+            download_gdrive_large_file(vcf_id, vcf_path)
+            download_gdrive_large_file(tbi_id, tbi_path)
 
-            # 3. Initialize Engine
+            # Initialize VCF engine
             vcf = VCF(vcf_path)
             results = []
-
-            # 4. Query the region
             for variant in vcf(region):
                 results.append({
                     "RSID": variant.ID if variant.ID != "." else f"chr{variant.CHROM}:{variant.POS}",
@@ -48,31 +56,19 @@ def parse_remote_genome(vcf_url, tbi_url, region="chr2:135787840-135837170"):
                     "Genotype": variant.gt_bases[0] if variant.gt_bases else "./."
                 })
             
-            if not results:
-                return f"No variants found in {region}. Check prefix or gene presence."
-            
-            return results
+            return results if results else f"No variants found in {region}."
 
     except Exception as e:
         return f"Bioinformatics Engine Error: {str(e)}"
 
-# --- THIS MUST BE AT THE LEFT MARGIN ---
 def fetch_snp_wisdom(rsid):
-    """
-    Connects to MyVariant.info to fetch clinical significance for your PhD.
-    """
     try:
         if "rs" not in str(rsid).lower():
-            return "Custom Coordinate: Clinical data not available in SNP database."
-            
+            return "Custom Coordinate: Clinical data not available."
         url = f"https://myvariant.info/v1/variant/{rsid}"
         res = requests.get(url, timeout=5).json()
-        
         clinvar = res.get('clinvar', {})
-        if isinstance(clinvar, list): 
-            clinvar = clinvar[0]
-            
-        significance = clinvar.get('rcv', [{}])[0].get('clinical_significance', 'No Data Found')
-        return significance
-    except Exception:
-        return "SNP Database Timeout or No Clinical Data"
+        if isinstance(clinvar, list): clinvar = clinvar[0]
+        return clinvar.get('rcv', [{}])[0].get('clinical_significance', 'No Data Found')
+    except:
+        return "SNP Database Timeout"
