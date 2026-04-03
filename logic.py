@@ -5,8 +5,8 @@ from fpdf import FPDF
 
 def parse_remote_genome(vcf_path, tbi_path, region):
     """
-    Bioinformatics Engine: Direct Local Processing.
-    Fixes the 'chrchr' prefix and prioritizes the RSID Registry.
+    Bioinformatics Engine: Optimized for ClinVar and GIAB datasets.
+    Handles 'Site-Only' VCFs by providing a fallback for genotypes.
     """
     try:
         if not os.path.exists(vcf_path):
@@ -14,7 +14,7 @@ def parse_remote_genome(vcf_path, tbi_path, region):
         
         vcf = VCF(vcf_path)
         
-        # 1. Safety Check
+        # 1. Safety Check: Verify file readability
         try:
             test_vcf = VCF(vcf_path)
             next(test_vcf()) 
@@ -44,14 +44,23 @@ def parse_remote_genome(vcf_path, tbi_path, region):
             elif file_id not in [".", "None", "nan", ""]:
                 final_id = file_id
             else:
-                # FIX: Removed manual 'chr' to prevent 'chrchr'
                 final_id = f"{variant.CHROM}:{pos}"
+
+            # GENOTYPE LOGIC: Safe extraction for ClinVar (which may have 0 samples)
+            try:
+                # If sample data exists (GIAB), get it. Otherwise, show Ref/Alt for ClinVar.
+                if len(vcf.samples) > 0:
+                    gt = variant.gt_bases[0] if variant.gt_bases else "./."
+                else:
+                    gt = f"{variant.REF}/{variant.ALT[0]}" # Database view
+            except:
+                gt = "Data N/A"
 
             results.append({
                 "RSID": final_id,
                 "Chr": variant.CHROM,
                 "Pos": pos,
-                "Genotype": variant.gt_bases[0] if variant.gt_bases else "./."
+                "Genotype": gt
             })
             
         return results if results else f"No variants found in {region}."
@@ -60,14 +69,9 @@ def parse_remote_genome(vcf_path, tbi_path, region):
         return f"Bioinformatics Engine Error: {str(e)}"
 
 def fetch_snp_wisdom(rsid):
-    """
-    Clinical Annotation: Resolves both RSIDs and Coordinates via MyVariant.info.
-    Essential for PhD-level Nutrigenetics reporting.
-    """
+    """Clinical Annotation: Fetches significance from MyVariant.info."""
     try:
         clean_id = str(rsid).split(" ")[0].lower()
-        
-        # If it is a coordinate, format it as chrom:g.pos for the API
         if ":" in clean_id:
             chrom, pos = clean_id.split(":")
             api_query = f"{chrom}:g.{pos}"
@@ -76,33 +80,26 @@ def fetch_snp_wisdom(rsid):
 
         url = f"https://myvariant.info/v1/variant/{api_query}"
         res = requests.get(url, timeout=5).json()
-        
         clinvar = res.get('clinvar', {})
-        if isinstance(clinvar, list): 
-            clinvar = clinvar[0]
+        if isinstance(clinvar, list): clinvar = clinvar[0]
         
-        # Pull clinical significance or provide a professional fallback
         rcv = clinvar.get('rcv', [{}])
         if isinstance(rcv, list) and len(rcv) > 0:
-            significance = rcv[0].get('clinical_significance', 'Likely Benign/VUS')
-        else:
-            significance = 'Unannotated / Common Variation'
-            
-        return significance
+            return rcv[0].get('clinical_significance', 'Likely Benign/VUS')
+        return 'Unannotated Variation'
     except:
-        return "Clinical Database Offline or No Record Found"
+        return "Database Record Not Found"
 
 def generate_pdf_report(results):
-    """Reporting Engine: Creates the final PDF bytes for the download button."""
+    """Reporting Engine: Creates professional PDF bytes."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, txt="Nutrigenetics Analysis Report", ln=True, align='C')
+    pdf.cell(200, 10, txt="Genomic Risk Report", ln=True, align='C')
     
     pdf.set_font("Arial", size=10)
     for row in results:
         pdf.ln(5)
-        # We call fetch_snp_wisdom during PDF generation to populate data
         wisdom = fetch_snp_wisdom(row['RSID'])
         pdf.multi_cell(0, 10, f"RSID: {row['RSID']} | Genotype: {row['Genotype']}\nInterpretation: {wisdom}", border=1)
         
