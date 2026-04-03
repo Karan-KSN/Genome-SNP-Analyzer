@@ -1,90 +1,38 @@
+import streamlit as st
 import os
-import requests
-from cyvcf2 import VCF
-from fpdf import FPDF
+from logic import parse_remote_genome, generate_pdf_report
 
-def get_vcf_chrom_prefix(vcf, target_num):
-    vcf_chroms = vcf.seqnames
-    patterns = [f"chr{target_num}", str(target_num), f"NC_0000{target_num.zfill(2)}"]
-    for p in patterns:
-        for actual in vcf_chroms:
-            if actual.startswith(p): return actual
-    return f"chr{target_num}" 
+st.set_page_config(page_title="Iron Primer: Clinical Analyzer", page_icon="🧬")
+st.title("🧬 High-Impact Nutrigenetics Analyzer")
+st.markdown("---")
 
-def fetch_snp_wisdom(rsid):
-    """Clinical Annotation: Filters for High-Impact Significance."""
-    try:
-        clean_id = str(rsid).split(" ")[0].lower()
-        api_query = f"{clean_id.split(':')[0]}:g.{clean_id.split(':')[1]}" if ":" in clean_id else clean_id
+uploaded_vcf = st.file_uploader("Upload VCF (.gz)", type=["gz"], key="vcf_v5")
+uploaded_tbi = st.file_uploader("Upload Index (.tbi)", type=["tbi"], key="tbi_v5")
+
+if uploaded_vcf and uploaded_tbi:
+    vcf_path, tbi_path = "temp.vcf.gz", "temp.vcf.gz.tbi"
+    with open(vcf_path, "wb") as f:
+        f.write(uploaded_vcf.getbuffer())
+        os.fsync(f.fileno())
+    with open(tbi_path, "wb") as f:
+        f.write(uploaded_tbi.getbuffer())
+        os.fsync(f.fileno())
         
-        url = f"https://myvariant.info/v1/variant/{api_query}"
-        res = requests.get(url, timeout=5).json()
-        clinvar = res.get('clinvar', {})
-        if isinstance(clinvar, list): clinvar = clinvar[0]
-        
-        rcv = clinvar.get('rcv', [{}])
-        if isinstance(rcv, list) and len(rcv) > 0:
-            return rcv[0].get('clinical_significance', 'Unannotated')
-        return 'Unannotated'
-    except:
-        return "Record Not Found"
-
-def parse_remote_genome(vcf_path, tbi_path, region_data):
-    """
-    Bioinformatics Engine: Now with Clinical Filtering.
-    Only returns variants that are NOT 'Benign' or 'Likely Benign'.
-    """
-    try:
-        vcf = VCF(vcf_path)
-        raw_chrom = region_data.split(":")[0].replace("chr", "")
-        coords = region_data.split(":")[1]
-        correct_chrom = get_vcf_chrom_prefix(vcf, raw_chrom)
-        final_query = f"{correct_chrom}:{coords}"
-        
-        NUTRIGENETICS_REGISTRY = {
-            63477061: "rs4646994 (ACE)",
-            11785729: "rs1801133 (MTHFR)",
-            74749576: "rs762551 (CYP1A2)",
-            135837170: "rs4988235 (LCT)"
-        }
-
-        results = []
-        for variant in vcf(final_query):
-            pos = int(variant.POS)
-            file_id = str(variant.ID) if variant.ID else "."
-            final_id = NUTRIGENETICS_REGISTRY.get(pos, file_id if file_id not in [".", "None"] else f"{variant.CHROM}:{pos}")
-
-            # Fetch wisdom for filtering
-            wisdom = fetch_snp_wisdom(final_id)
-            
-            # THE FILTER: Ignore the noise (Benign/Likely Benign) [cite: 401]
-            if "benign" in wisdom.lower():
-                continue
-
-            if len(vcf.samples) > 0:
-                gt = variant.gt_bases[0] if variant.gt_bases is not None else "./."
+    st.success("✅ Ready for High-Impact Scan.")
+    GENE_MAP = {
+        "ACE (Endurance)": "chr17:63470000-63600000",
+        "MTHFR (Folate)": "chr1:11780000-11800000",
+        "LCT (Lactose)": "chr2:135700000-135840000",
+        "CYP1A2 (Caffeine)": "chr15:74700000-74800000"
+    }
+    selected = st.selectbox("Gene Selection:", list(GENE_MAP.keys()))
+    
+    if st.button("Filter & Analyze"):
+        with st.spinner("Extracting High-Impact Variants..."):
+            results = parse_remote_genome(vcf_path, tbi_path, GENE_MAP[selected])
+            if isinstance(results, str):
+                st.warning(results)
             else:
-                gt = f"{variant.REF}/{variant.ALT[0]} (Database)" 
-
-            results.append({
-                "RSID": final_id,
-                "Chr": variant.CHROM,
-                "Pos": pos,
-                "Genotype": gt,
-                "Interpretation": wisdom # Added to dict for efficiency
-            })
-            
-        return results if results else f"No High-Impact variants found in {final_query}."
-    except Exception as e:
-        return f"Bioinformatics Engine Error: {str(e)}"
-
-def generate_pdf_report(results):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, txt="High-Impact Genomic Risk Report", ln=True, align='C')
-    pdf.set_font("Arial", size=10)
-    for row in results:
-        pdf.ln(5)
-        pdf.multi_cell(0, 10, f"RSID: {row['RSID']} | Genotype: {row['Genotype']}\nInterpretation: {row['Interpretation']}", border=1)
-    return bytes(pdf.output())
+                st.table(results)
+                pdf_bytes = generate_pdf_report(results)
+                st.download_button("📥 Download Filtered Report", data=pdf_bytes, file_name="High_Impact_Report.pdf")
