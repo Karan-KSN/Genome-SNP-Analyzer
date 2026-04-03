@@ -40,16 +40,16 @@ def parse_remote_genome(vcf_path, tbi_path, region):
         # 3. Regional Scan
         for variant in vcf(region):
             pos = int(variant.POS)
-            file_id = variant.ID
+            file_id = str(variant.ID) if variant.ID else "."
             
-            # IDENTITY LOGIC:
-            # 1. Use file ID if it exists.
-            # 2. If file has '.', check our Registry.
-            # 3. Otherwise, use Coordinate.
-            if file_id and file_id != ".":
-                final_id = file_id
-            elif pos in NUTRIGENETICS_REGISTRY:
+            # IDENTITY LOGIC (Reordered for better identification):
+            # 1. Check our Master Registry first (Guarantee name for key genes)
+            if pos in NUTRIGENETICS_REGISTRY:
                 final_id = NUTRIGENETICS_REGISTRY[pos]
+            # 2. Use file ID if it exists and isn't a null value
+            elif file_id not in [".", "None", "nan", ""]:
+                final_id = file_id
+            # 3. Fallback to coordinate so it's never blank
             else:
                 final_id = f"chr{variant.CHROM}:{pos}"
 
@@ -59,7 +59,8 @@ def parse_remote_genome(vcf_path, tbi_path, region):
                 "Pos": pos,
                 "Genotype": variant.gt_bases[0] if variant.gt_bases else "./."
             })
-
+            
+        return results if results else f"No variants found in {region}."
 def fetch_snp_wisdom(rsid):
     """Clinical Annotation for the PhD/Portfolio."""
     try:
