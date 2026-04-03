@@ -36,10 +36,10 @@ if uploaded_vcf and uploaded_tbi:
     
     # 2. Gene Selection Menu
     GENE_MAP = {
-        "ACE (Endurance & Hypertension Risk)": "chr17:63477061-63500000",
-        "MTHFR (Folate & DNA Repair)": "chr1:11785729-11785731",
-        "CYP1A2 (Caffeine Metabolism Speed)": "chr15:74719543-74750000",
-        "LCT (Lactose Tolerance)": "chr2:135787840-135837170"
+        "ACE (Broad Scan)": "chr17:63470000-63600000", # 130kb window
+        "MTHFR (Broad Scan)": "chr1:11780000-11800000", # 20kb window
+        "LCT (Broad Scan)": "chr2:135700000-135900000", # 200kb window
+        "Caffeine (Broad Scan)": "chr15:74700000-74800000" # 100kb window
     }
 
     selected_label = st.selectbox("Which gene would you like to analyze?", list(GENE_MAP.keys()))
