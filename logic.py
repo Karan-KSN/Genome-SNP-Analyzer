@@ -1,18 +1,15 @@
 from cyvcf2 import VCF
-import requests
 
 def parse_remote_genome(vcf_url, tbi_url, region="17:63477061-63500000"):
     """
-    Handles remote streaming by passing VCF and TBI as direct positions.
-    This bypasses the 'unexpected keyword' error.
+    Directly passes both the VCF and the TBI URLs to the engine.
+    This is required for GitHub Release streaming.
     """
     try:
-        # We pass the index link as the second piece of information
-        # no 'index_url=' label is needed here.
+        # The magic happens here: we pass the TBI as the second argument
         vcf = VCF(vcf_url, tbi_url) 
         
         results = []
-        # The engine now 'jumps' to the ACE gene region instantly
         for variant in vcf(region):
             if variant.ID and "rs" in variant.ID:
                 results.append({
