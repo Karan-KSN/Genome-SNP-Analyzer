@@ -27,6 +27,8 @@ if uploaded_vcf and uploaded_tbi:
     
     with open(vcf_path, "wb") as f:
         f.write(uploaded_vcf.getbuffer())
+        f.flush()
+        os.fsync(f.fileno()) # Forces the OS to write the bits to the disk immediately
     with open(tbi_path, "wb") as f:
         f.write(uploaded_tbi.getbuffer())
         
