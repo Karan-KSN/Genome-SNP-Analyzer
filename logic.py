@@ -49,17 +49,35 @@ def download_large_file(url, dest):
 
 def parse_remote_genome(vcf_url, tbi_url, region="chr2:135787840-135837170"):
     try:
-        # Extract IDs from the links you provided
-        vcf_id = re.search(r'/d/([a-zA-Z0-9-_]+)', vcf_url).group(1)
-        tbi_id = re.search(r'/d/([a-zA-Z0-9-_]+)', tbi_url).group(1)
-        
         with tempfile.TemporaryDirectory() as tmpdir:
             vcf_path = os.path.join(tmpdir, "remote.vcf.gz")
             tbi_path = os.path.join(tmpdir, "remote.vcf.gz.tbi")
 
-            # Use the specialized large-file downloader
-            download_gdrive_large_file(vcf_id, vcf_path)
-            download_gdrive_large_file(tbi_id, tbi_path)
+            # UNIVERSAL DOWNLOADER
+            def download_universal(url, dest):
+                session = requests.Session()
+                # Check if it's Google Drive
+                if "drive.google.com" in url or "docs.google.com" in url:
+                    match = re.search(r'/d/([a-zA-Z0-9-_]+)', url)
+                    if not match: raise ValueError("Invalid GDrive Link")
+                    file_id = match.group(1)
+                    confirm_url = "https://docs.google.com/uc?export=download"
+                    res = session.get(confirm_url, params={'id': file_id}, stream=True)
+                    token = get_confirm_token(res)
+                    if token:
+                        res = session.get(confirm_url, params={'id': file_id, 'confirm': token}, stream=True)
+                else:
+                    # It's a Direct Link (GitHub)
+                    res = session.get(url, stream=True, timeout=30)
+                
+                res.raise_for_status()
+                with open(dest, 'wb') as f:
+                    for chunk in res.iter_content(chunk_size=1024*1024):
+                        if chunk: f.write(chunk)
+
+            # Execution
+            download_universal(vcf_url, vcf_path)
+            download_universal(tbi_url, tbi_path)
 
             # Initialize VCF engine
             vcf = VCF(vcf_path)
