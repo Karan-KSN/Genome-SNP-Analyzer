@@ -10,7 +10,7 @@ def convert_gdrive_link(url):
             return f"https://drive.google.com/uc?export=download&id={file_id}"
     return url
 
-def parse_remote_genome(vcf_url, tbi_url, region="17:63477061-63500000"):
+def parse_remote_genome(vcf_url, tbi_url, region="chr17:63477061-63500000"):
     # Apply the conversion before downloading
     vcf_direct = convert_gdrive_link(vcf_url)
     tbi_direct = convert_gdrive_link(tbi_url)
