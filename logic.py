@@ -33,8 +33,7 @@ def fetch_snp_wisdom(rsid):
 def parse_remote_genome(vcf_path, tbi_path, region_data):
     """
     Bioinformatics Engine with Positive Clinical Filtering.
-    Only retains target panel SNPs or explicitly defined clinical risks.
-    Handles both GIAB (Personal) and ClinVar (Database) formats.
+    Targeting exact GRCh38 coordinates for panel precision.
     """
     try:
         vcf = VCF(vcf_path)
@@ -43,11 +42,12 @@ def parse_remote_genome(vcf_path, tbi_path, region_data):
         correct_chrom = get_vcf_chrom_prefix(vcf, raw_chrom)
         final_query = f"{correct_chrom}:{coords}"
         
+        # EXACT GRCh38 Coordinates
         NUTRIGENETICS_REGISTRY = {
-            63477061: "rs4646994 (ACE)",
-            11785729: "rs1801133 (MTHFR)",
+            63488539: "rs4646994 (ACE)",
+            11796321: "rs1801133 (MTHFR)",
             74749576: "rs762551 (CYP1A2)",
-            135837170: "rs4988235 (LCT)"
+            135851076: "rs4988235 (LCT)"
         }
 
         results = []
@@ -58,16 +58,14 @@ def parse_remote_genome(vcf_path, tbi_path, region_data):
 
             wisdom = fetch_snp_wisdom(final_id)
             
-            # --- THE POSITIVE FILTER ---
+            # THE POSITIVE FILTER
             is_master_snp = pos in NUTRIGENETICS_REGISTRY
             wisdom_lower = wisdom.lower()
             is_risk = any(keyword in wisdom_lower for keyword in ["pathogenic", "risk factor", "drug response", "protective"])
 
             if not (is_master_snp or is_risk):
-                continue # Discard unannotated and benign noise
-            # ---------------------------
+                continue 
 
-            # GIAB vs ClinVar Sample Handling
             if len(vcf.samples) > 0:
                 gt = variant.gt_bases[0] if variant.gt_bases is not None else "./."
             else:
