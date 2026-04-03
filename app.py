@@ -1,66 +1,38 @@
 import streamlit as st
 import os
-from logic import parse_remote_genome, fetch_snp_wisdom, generate_pdf_report
+from logic import parse_remote_genome, generate_pdf_report
 
-# Set page config for a professional look
-st.set_page_config(page_title="Iron Primer: Genomic Risk", page_icon="🧬")
+st.set_page_config(page_title="Iron Primer: Clinical Analyzer", page_icon="🧬")
+st.title("🧬 High-Impact Nutrigenetics Analyzer")
+st.markdown("---")
 
-st.title("🧬 Personal Nutrigenetics Risk Analyzer")
-st.markdown("### Upload your genetic data to discover your unique risks.")
-
-# 1. User-Friendly File Uploaders (With Unique Keys to fix Duplicate ID error)
-uploaded_vcf = st.file_uploader(
-    "Upload your Genomic VCF (.gz)", 
-    type=["gz"], 
-    key="vcf_main"
-)
-uploaded_tbi = st.file_uploader(
-    "Upload your Index (.tbi)", 
-    type=["tbi"], 
-    key="tbi_main"
-)
+uploaded_vcf = st.file_uploader("Upload VCF (.gz)", type=["gz"], key="vcf_v5")
+uploaded_tbi = st.file_uploader("Upload Index (.tbi)", type=["tbi"], key="tbi_v5")
 
 if uploaded_vcf and uploaded_tbi:
-    # Save to local /tmp directory
-    vcf_path = "temp_user.vcf.gz"
-    tbi_path = "temp_user.vcf.gz.tbi"
-    
+    vcf_path, tbi_path = "temp.vcf.gz", "temp.vcf.gz.tbi"
     with open(vcf_path, "wb") as f:
         f.write(uploaded_vcf.getbuffer())
-        f.flush()
-        os.fsync(f.fileno()) # Forces the OS to write the bits to the disk immediately
+        os.fsync(f.fileno())
     with open(tbi_path, "wb") as f:
         f.write(uploaded_tbi.getbuffer())
+        os.fsync(f.fileno())
         
-    st.success("✅ Genetic Data Streamed Successfully!")
-    
-    # 2. Gene Selection Menu
+    st.success("✅ Ready for High-Impact Scan.")
     GENE_MAP = {
-        "ACE (Broad Scan)": "chr17:63470000-63600000", # 130kb window
-        "MTHFR (Broad Scan)": "chr1:11780000-11800000", # 20kb window
-        "LCT (Broad Scan)": "chr2:135700000-135900000", # 200kb window
-        "Caffeine (Broad Scan)": "chr15:74700000-74800000" # 100kb window
+        "ACE (Endurance)": "chr17:63470000-63600000",
+        "MTHFR (Folate)": "chr1:11780000-11800000",
+        "LCT (Lactose)": "chr2:135700000-135840000",
+        "CYP1A2 (Caffeine)": "chr15:74700000-74800000"
     }
-
-    selected_label = st.selectbox("Which gene would you like to analyze?", list(GENE_MAP.keys()))
-    target_region = GENE_MAP[selected_label]
-
-    # 3. Execution
-    if st.button("Generate My Risk Profile"):
-        with st.spinner(f"Scanning {selected_label} locus..."):
-            results = parse_remote_genome(vcf_path, tbi_path, target_region)
-            
+    selected = st.selectbox("Gene Selection:", list(GENE_MAP.keys()))
+    
+    if st.button("Filter & Analyze"):
+        with st.spinner("Extracting High-Impact Variants..."):
+            results = parse_remote_genome(vcf_path, tbi_path, GENE_MAP[selected])
             if isinstance(results, str):
-                st.error(results)
+                st.warning(results)
             else:
-                st.success(f"Found {len(results)} variants!")
                 st.table(results)
-                
-                # 4. Clinical PDF Generation
                 pdf_bytes = generate_pdf_report(results)
-                st.download_button(
-                    label="📥 Download My Clinical PDF Report",
-                    data=pdf_bytes,
-                    file_name=f"{selected_label}_Risk_Report.pdf",
-                    mime="application/pdf"
-                )
+                st.download_button("📥 Download Filtered Report", data=pdf_bytes, file_name="High_Impact_Report.pdf")
